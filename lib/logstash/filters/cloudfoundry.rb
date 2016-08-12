@@ -14,7 +14,7 @@ class LogStash::Filters::Example < LogStash::Filters::Base
   config :cf_user,             :validate => :string
   config :cf_password,         :validate => :string
   config :default_org,         :validate => :string,  :default => "system"
-  config :default_space,       :validate => :string,  :default => "development"
+  config :default_space,       :validate => :string,  :default => "appsmanager"
   config :skip_ssl_validation, :validate => :boolean, :default => true
   config :cache_flush_time,    :validate => :string,  :default => "10m"
   config :cache_age_time,      :validate => :number,  :default => 600
@@ -57,12 +57,64 @@ class LogStash::Filters::Example < LogStash::Filters::Base
 
   public
   def filter(event)
+    #TODO: Not sure if needed
+    #return unless filter?(event)
+    if @cf_logged_in
 
-   if @cf_logged_in
+      message = event["message"]
 
-   else
-     #try to log in again
-   end
+      app_guid = message[/loggregator ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/, 1]
+      if app_guid.nil?
+        event["appguid"] = "AppGuidNotFound"
+      else
+        event["appguid"] = app_guid
+
+        app_cache_item = nil
+        @app_cache_mutex.synchronize { app_cache_item = @app_cache[app_guid] }
+
+        if app_cache_item.nil?
+
+          app_query = cloudfoundry_curl("/v2/apps/#{app_guid}")
+          app_detail = app_query["entity"]
+
+          if app_detail.nil?
+
+            #Try to log in again
+            cloudfoundry_login
+            app_query = cfcurl("/v2/apps/#{app_guid}")
+            app_detail = app_query["entity"]
+
+            if app_detail.nil?
+              #Mark appguid as unknown and return
+              event["appguid"] = "unknown"
+              filter_matched(event)
+              return
+            end
+          end
+
+          space_query = cloudfoundry_curl("/v2/spaces/#{app_detail["space_guid"]}")
+          org_query = cloudfoundry_curl("/v2/organizations/#{space_query["entity"]["organization_guid"]}")
+
+          app_info = { }
+          app_info["appname"] = app_detail["name"]
+          app_info["spacename"] = space_query["entity"]["name"]
+          app_info["orgname"] = org_query["entity"]["name"]
+
+          app_cache_item = { }
+          app_cache_item["expire_at"] = Time.now.to_i + @cache_age_time
+          app_cache_item["info"] = app_info
+          @app_cache_mutex.synchronize { @app_cache[app_guid] = app_cache_item }
+        else
+          app_info = app_cache_item['info']
+        end
+
+        @logger.debug("cloudfoundry app info: #{app_info}")
+        app_info.each { |k,v| event[k] = v }
+      end
+    end
+
+    # filter_matched should go in the last line of our successful code
+    filter_matched(event)
 
   end # def filter
 
@@ -82,10 +134,11 @@ class LogStash::Filters::Example < LogStash::Filters::Base
 
   def cloudfoundry_curl(path, body = nil)
     if body.nil?
-      cf('curl ' + URI::encode(path))
+      cli_command = 'cf curl ' + URI::encode(path)
     else
-      cf('curl ' + URI::encode(path) + ' -d "' + body.gsub('"', '\"') + '"')
+      cli_command = 'cf curl ' + URI::encode(path) + ' -d "' + body.gsub('"', '\"') + '"'
     end
+    return `#{cli_command}`
   end
 
 end # class LogStash::Filters::Example
