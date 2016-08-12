@@ -1,5 +1,5 @@
 require 'spec_helper'
-require "logstash/filters/cfapp"
+require "logstash/filters/cloudfoundry"
 
 describe LogStash::Filters::Example do
 
