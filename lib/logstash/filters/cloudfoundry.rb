@@ -21,28 +21,15 @@ class LogStash::Filters::Foo < LogStash::Filters::Base
 
   public
   def register
-	
-    @logger.warn("PRINT - cf_api: #{cf_api}")
-    @logger.warn("PRINT - cf_user: #{cf_user}")
-    @logger.warn("PRINT - cf_password: #{cf_password}")
-    @logger.warn("PRINT - default_org: #{default_org}")
-    @logger.warn("PRINT - default_space: #{default_space}")
-    @logger.warn("PRINT - skip_ssl_validation: #{skip_ssl_validation}")
-    @logger.warn("PRINT - cache_flush_time: #{cache_flush_time}")
-    @logger.warn("PRINT - cache_age_time: #{cache_age_time}")
-
     if @cf_api.empty? || @cf_user.empty? || @cf_password.empty?
       @logger.warn("Requirement parameters where not passed in. Filter won't be applied")
       @cf_logged_in = false
     else
-	  
-     @app_cache = Hash.new
-     @app_cache_mutex = Mutex.new
-     @scheduler = Rufus::Scheduler.new
-	 
-	 @logger.warn("Entering Scheduler Set up")
-	 
-	 @job = @scheduler.every(@cache_flush_time) do
+       @app_cache = Hash.new
+       @app_cache_mutex = Mutex.new
+       @scheduler = Rufus::Scheduler.new
+
+	    @job = @scheduler.every(@cache_flush_time) do
         begin
           @app_cache_mutex.synchronize {
               @app_cache.delete_if { |key, value| value["expire_at"]<Time.now.to_i }
@@ -51,15 +38,8 @@ class LogStash::Filters::Foo < LogStash::Filters::Base
           @logger.error("Error purging app info cache: #{msg}")
         end
       end
-	  @logger.warn("Exiting Scheduler Set up")
-	  
-	  @logger.warn("Logging out of CF")
-	  cflogout
-	  @logger.warn("Successfully logged out")
-	  
-	  @logger.warn("Logging back into CF")
-	  
-	  login_status, login_output = cflogin
+
+	    login_status, login_output = cflogin
 	  
       if login_status
         @logger.warn("Logged into CloudFoundry. Filter will be applied")
@@ -69,31 +49,28 @@ class LogStash::Filters::Foo < LogStash::Filters::Base
         @cf_logged_in = false
       end
     end
-	
-	@logger.warn("CF LOGGED IN FLAG IS: #{@cf_logged_in}")
-
   rescue Exception => e
     @logger.error("Error logging into CloudFoundry. Filter won't be applied")
-	@logger.error("Exception: #{e.inspect}")
-	@logger.error("Backtrace: #{e.backtrace}")
+    @logger.error("Exception: #{e.inspect}")
+    @logger.error("Backtrace: #{e.backtrace}")
     @cf_logged_in = false
   end # def register
   
   public
   def filter(event)
-  
-    @logger.warn("CF LOGGED IN FLAG IS: #{@cf_logged_in}")
-    if @cf_logged_in
 
+    @logger.warn("CF LOGGED IN FLAG IS: #{@cf_logged_in}")
+
+    if @cf_logged_in
       message = event["message"]
       @logger.warn("CF EVENT MESSAGE IS: #{message}")
-	  
       app_guid = message[/loggregator ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/, 1]
+
       #If there's no app guid don't parse the request further
-	  
-      @logger.warn("CF APPGUID IS:  #{app_guid}")	  
-	  if app_guid.nil?
-     	@logger.warn("No GUID was detected, log will not be processed")
+      @logger.warn("CF APPGUID IS:  #{app_guid}")
+
+      if app_guid.nil?
+        @logger.warn("No GUID was detected, log will not be processed")
       else
         event["appguid"] = app_guid
 
@@ -101,73 +78,62 @@ class LogStash::Filters::Foo < LogStash::Filters::Base
         @app_cache_mutex.synchronize { app_cache_item = @app_cache[app_guid] }
 
         if app_cache_item.nil?
-		  @logger.warn("GUID IS NOT IN CACHE")
-
+          @logger.warn("GUID IS NOT IN CACHE")
           app_query_status, app_query = cfcurl("/v2/apps/#{app_guid}")
-		  @logger.warn("CF app_query_status: #{app_query_status}")
-		  @logger.warn("CF app_query: #{app_query}")
-		  
-          app_detail = app_query["entity"]		  
-		  #TODO: What should I do if query_status is false? 
-			
+
+          @logger.warn("CF app_query_status: #{app_query_status}")
+          @logger.warn("CF app_query: #{app_query}")
+
+          app_detail = app_query["entity"]
+          #TODO: What should I do if query_status is false?
+
           space_query_status, space_query = cfcurl("/v2/spaces/#{app_detail["space_guid"]}")
-  		  #TODO: What should I do if query_status is false? 
+          #TODO: What should I do if query_status is false?
 
           org_query_status, org_query = cfcurl("/v2/organizations/#{space_query["entity"]["organization_guid"]}")
-		  #TODO: What should I do if query_status is false? 
+          #TODO: What should I do if query_status is false?
 
           app_info = { }
           app_info["appname"] = app_detail["name"]
           app_info["spacename"] = space_query["entity"]["name"]
           app_info["orgname"] = org_query["entity"]["name"]
-		  
+
           app_cache_item = { }
           app_cache_item["expire_at"] = Time.now.to_i + @cache_age_time
           app_cache_item["info"] = app_info
           @app_cache_mutex.synchronize { @app_cache[app_guid] = app_cache_item }
-		  
+
         else
-		  @logger.warn("GUID IS IN CACHE")
+          @logger.warn("GUID IS IN CACHE")
           app_info = app_cache_item['info']
         end
 
         @logger.debug("cloudfoundry app info: #{app_info}")
         app_info.each { |k,v| event[k] = v }
       end
+    else
+      @logger.warn("No longer logged in. Maybe I should do something about it")
+      #TODO: What should I do if I'm no longer logged in
+    end
 
-	else
-	  @logger.warn("No longer logged in. Maybe I should do something about it")
-	  #TODO: What should I do if I'm no longer logged in
-	end
-
-    # filter_matched should go in the last line of our successful code 
     filter_matched(event)
-  
   rescue Exception => e
-	@logger.error("Exception message: #{e.inspect}")
-	@logger.error("Exception backtrace: #{e.backtrace}")
+    @logger.error("Exception message: #{e.inspect}")
+    @logger.error("Exception backtrace: #{e.backtrace}")
   end
 
   private
   def cfcurl(path, body = nil)
-  
-	if body.nil?
-		curl_status, curl_body = cf('curl ' + URI::encode(path))  
-	else
-		curl_status, curl_body = cf('curl ' + URI::encode(path) + ' -d "' + body.gsub('"', '\"') + '"')
-	end
-	
-	@logger.warn("CURL_STATUS: #{curl_status}")
-	@logger.warn("CURL_STATUS: #{curl_status.class}")
-	@logger.warn("CURL_BODY: #{curl_body}")
-	@logger.warn("CURL_BODY: #{curl_body.class}")
-	
-	return curl_status, JSON.parse(curl_body)
+    if body.nil?
+      curl_status, curl_body = cf('curl ' + URI::encode(path))
+    else
+      curl_status, curl_body = cf('curl ' + URI::encode(path) + ' -d "' + body.gsub('"', '\"') + '"')
+    end
+    return curl_status, JSON.parse(curl_body)
   end
 
   private
   def cflogin
-
     cf( 'login' +
       (@skip_ssl_validation ? ' --skip-ssl-validation' : '') +
       ' -a ' + @cf_api + 
@@ -175,47 +141,46 @@ class LogStash::Filters::Foo < LogStash::Filters::Base
       ' -p ' + @cf_password + 
       ' -o ' + @default_org + 
       ' -s ' + @default_space )
-   
   end
 
   private
   def cflogout
-	cf ( 'logout' )
+    cf ( 'logout' )
   end
   
   private
   def cf(cmd)
 	
-	@logger.warn("Executing the following command ' cf #{cmd}'")
+    @logger.warn("Executing the following command ' cf #{cmd}'")
     stdout, stderr, status = Open3.capture3("timeout 10 cf #{cmd}")
-	
-	@logger.warn("PRINT - -----------------------------")
-	@logger.warn("PRINT - CF Command stdout: #{stdout}")
-	@logger.warn("PRINT - -----------------------------")
-	@logger.warn("PRINT - CF Command stderr: #{stderr}")
-	@logger.warn("PRINT - -----------------------------")
-	@logger.warn("PRINT - CF Command status: #{status.success?}")
-	@logger.warn("PRINT - -----------------------------")
-	
-	return_status = status.success?
-	
+
+    @logger.warn("PRINT - -----------------------------")
+    @logger.warn("PRINT - CF Command stdout: #{stdout}")
+    @logger.warn("PRINT - -----------------------------")
+    @logger.warn("PRINT - CF Command stderr: #{stderr}")
+    @logger.warn("PRINT - -----------------------------")
+    @logger.warn("PRINT - CF Command status: #{status.success?}")
+    @logger.warn("PRINT - -----------------------------")
+
+    return_status = status.success?
+
     unless status.success?
       @logger.warn("CF command failed")
-	  if stdout.include?("Error finding org")
-		return_status = true
-	  	@logger.warn("An invalid org was submitted but processesing will continue")
-	  elsif stdout.include?("Error finding space")
-		return_status = true
-  	  	@logger.warn("An invalid space was submitted but processing will continue ")
-	  else
-	    return_status = false
-		@logger.error("Unable to complete command 'cf #{cmd}")
-		@logger.error("Following output was generated: #{stdout}")
-	  end
-	end
-     
-	return return_status, stdout
-	
+      if stdout.include?("Error finding org")
+        return_status = true
+        @logger.warn("An invalid org was submitted but processesing will continue")
+      elsif stdout.include?("Error finding space")
+        return_status = true
+        @logger.warn("An invalid space was submitted but processing will continue ")
+      else
+        return_status = false
+        @logger.error("Unable to complete command 'cf #{cmd}")
+        @logger.error("Following output was generated: #{stdout}")
+      end
+    end
+
+    return return_status, stdout
+
   end
 
 end
