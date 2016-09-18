@@ -1,12 +1,12 @@
 require 'spec_helper'
 require "logstash/filters/cloudfoundry"
 
-describe LogStash::Filters::Example do
+describe LogStash::Filters::CloudFoundry do
 
   describe "Set to Hello World" do
     let(:config) do <<-CONFIG
       filter {
-        cfapp {
+        cloudfoundry {
         }
       }
     CONFIG
