@@ -66,9 +66,12 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # A cache items time to live
   config :cache_age_time,      		   :validate => :number,  :default => 600
 
-  # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI
+  # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI again
   config :cf_retry_cli_timeout,	      :validate => :number,  :default => 0
 
+  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't want resouces continuously curling it 
+  config :cache_invalid_guids, 		  :validate => :boolean, :default => false
+  
   public
   def register
 
@@ -122,7 +125,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
         if app_cache_item.nil?
 
           app_query   = cfcurl("/v2/apps/#{app_guid}")
-          validate_query(app_query)
+          validate_query(app_query, app_guid)
 
           space_query = cfcurl("/v2/spaces/#{app_query[:stdout]["entity"]["space_guid"]}")
           validate_query(space_query)
@@ -172,10 +175,16 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   end # def filter
 
   private
-  def validate_query(query)
+  def validate_query(query, guid = "")
 
     if query[:status]
       if query[:stdout]['metadata'].nil?
+		
+		if @cache_invalid_guids && !guid.blank?
+		  #app_cache_item["expire_at"] = Time.now.to_i + @cache_age_time
+          @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
+		end
+	  
         raise "CF-curl-inavlid: #{query[:stdout]}"
       end
     else
@@ -184,6 +193,8 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
   end # def validate_query
 
+  
+  
   private
   def cfcurl(path, body = nil)
 
