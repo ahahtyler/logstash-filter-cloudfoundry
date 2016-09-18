@@ -180,10 +180,9 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     if query[:status]
       if query[:stdout]['metadata'].nil?
 		
-		if @cache_invalid_guids && !guid.blank?
-		  #app_cache_item["expire_at"] = Time.now.to_i + @cache_age_time
-          @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
-		end
+	if @cache_invalid_guids && !guid.blank?
+  	  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
+	end
 	  
         raise "CF-curl-inavlid: #{query[:stdout]}"
       end
@@ -193,8 +192,6 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
   end # def validate_query
 
-  
-  
   private
   def cfcurl(path, body = nil)
 
