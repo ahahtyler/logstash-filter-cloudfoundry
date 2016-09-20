@@ -13,6 +13,8 @@ require "open3"
 #  - Space name
 #  - Application name
 #
+# For this plugin to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli)
+#
 #The conf should look like this:
 #   filter{
 #     cloudfoundry{
