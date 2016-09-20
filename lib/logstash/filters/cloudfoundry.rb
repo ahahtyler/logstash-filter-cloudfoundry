@@ -8,7 +8,7 @@ require "rufus/scheduler"
 require "open3"
 
 # The Cloud Foundry filter performs a lookup against a Cloud Foundry foundation to provide the following pieces of
-# meta-data to an application log
+# meta-data to an application log and stores this data in a local cache. 
 #  - Org name
 #  - Space name
 #  - Application name
