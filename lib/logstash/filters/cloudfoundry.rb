@@ -71,7 +71,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI again
   config :cf_retry_cli_timeout,	      :validate => :number,  :default => 0
 
-  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't want resouces continuously curling it 
+  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't waste resouces continuously curling for it 
   config :cache_invalid_guids, 		  :validate => :boolean, :default => false
   
   public
