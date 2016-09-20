@@ -19,5 +19,10 @@ Gem::Specification.new do |s|
 
   # Gem dependencies
   s.add_runtime_dependency "logstash-core", '>= 1.4.0', '< 3.0.0'
+  #s.add_runtime_dependency "json"  
+  #s.add_runtime_dependency "open-uri"
+  #s.add_runtime_dependency "rufus/scheduler"
+  #s.add_runtime_dependency "open3"
+  
   s.add_development_dependency 'logstash-devutils'
 end
