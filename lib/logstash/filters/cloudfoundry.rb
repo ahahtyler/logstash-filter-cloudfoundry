@@ -119,8 +119,8 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 	
     #Check folder creation status. 
     unless status.success?
-      unless response.include?("File exists")
- 	raise "CF-Home-Folder-Creation: #{stderr}"
+      unless stderr.include?("File exists")
+        raise "CF-Home-Folder-Creation: #{stderr}"
       end
     end
 
