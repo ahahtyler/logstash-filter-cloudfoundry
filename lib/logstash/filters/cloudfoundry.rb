@@ -99,7 +99,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
       raise "Required paramters where left blank."
     end
 	
-	#Set up cache and scheduler
+    #Set up cache and scheduler
     @app_cache       = Hash.new
     @app_cache_mutex = Mutex.new
     @scheduler       = Rufus::Scheduler.new
@@ -113,18 +113,18 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
       end
     end
 
-	#define CF_HOME path
+    #define CF_HOME path
     @cf_path = "#{ENV['HOME']}/#{@cf_api.gsub(/[^0-9A-Za-z]/, '')}"	
     stdout, stderr, status = Open3.capture3("mkdir #{@cf_path}")	
 	
-	#Check folder creation status. 
-	unless status.success?
+    #Check folder creation status. 
+    unless status.success?
       unless response.include?("File exists")
-		raise "CF-Home-Folder-Creation: #{stderr}"
+ 	raise "CF-Home-Folder-Creation: #{stderr}"
       end
     end
 
-	#Login to CF endpoint
+    #Login to CF endpoint
     login_query = cflogin
     raise "CF-login-failed: #{login_query[:stdout]}" unless login_query[:status]
 
@@ -213,9 +213,9 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     if query[:status]
       if query[:stdout]['metadata'].nil?
 		
-		if @cache_invalid_guids && !guid.blank?
-		  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
-		end
+	if @cache_invalid_guids && !guid.blank?
+	  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
+	end
 	 
         raise "CF-curl-inavlid: #{query[:stdout]}"
       end
@@ -251,8 +251,8 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
   private
   def cf(cmd)
-	stdout, stderr, status = Open3.capture3({"CF_HOME" => "#{@cf_home}"}, "cf #{cmd}")	
-	command_output = { :stdout => valid_json?(stdout), :stderr => stderr, :status => status.success?}
+    stdout, stderr, status = Open3.capture3({"CF_HOME" => "#{@cf_home}"}, "cf #{cmd}")	
+    command_output = { :stdout => valid_json?(stdout), :stderr => stderr, :status => status.success?}
     command_output
   end # def cf
 
