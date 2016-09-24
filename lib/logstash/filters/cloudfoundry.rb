@@ -27,7 +27,7 @@ require "open3"
 #
 # For this plugin to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli)
 #
-# This filter, only processes 1 event at a time, so the use of this plugin can significantly slow down your pipeline's
+# This filter only processes 1 event at a time so the use of this plugin can significantly slow down your pipeline's
 # throughput if you have a high latency network. In the event of an outage (network or cloud foundry infrastructure), a
 # retry flag can bet set to reduce the number of failed log-in and curl attempts to the Cloud Foundry endpoint. This
 # will allow the pipeline to function without severely impacting throughput. Additionally adjusting the cache flush
@@ -76,10 +76,10 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # Any Cloud Foundry Space that a users account has access to
   config :cf_space,       		       :validate => :string
 
-  # Skip SSL validation while loging into the endpoint
+  # Skip SSL validation while logging into the endpoint
   config :skip_ssl_validation, 		   :validate => :boolean, :default => true
 
-  # How often scheduler is run to clean up cache
+  # How often the scheduler is run to clean up cache
   config :cache_flush_time,    		   :validate => :string,  :default => "10m"
 
   # A cache items time to live
@@ -88,7 +88,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI again
   config :cf_retry_cli_timeout,	      :validate => :number,  :default => 0
 
-  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't want resouces continuously curling it 
+  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't waste resouces continuously curling it 
   config :cache_invalid_guids, 		  :validate => :boolean, :default => false
   
   public
