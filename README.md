@@ -6,21 +6,34 @@ It is fully free and fully open source. The license is Apache 2.0, meaning you a
 
 ## Documentation
 
-The Cloud Foundry filter will add the following meta-data to an application logs
+The Cloud Foundry filter will add the following meta-data to an application log
 - Org name
 - Space name
 - Application name
 
-Cloud Foundry only provides the applications GUID and logtype when shipping logs directly from the loggregator. This filter will use that guid and the Cloud Foundry CLI to look up information about your application. 
+Cloud Foundry only provides an applications GUID when shipping logs directly from the loggregator when using a syslog drain. This filter will use that GUID and the Cloud Foundry CLI to look up information about your application. 
 
 That being said, for this filter to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli).
 
 This filter can be used by any user in the Cloud Foundry environemnt that has the "space developer" role for the applications you want to collect data from (not only administrators). However, being an administrator does allow you to set up a more felxibile logging architecture, this fliter was designed to help app teams migrating to the cloud easily hook into thier existing ELK stacks. 
 
-This filter only processes 1 event at a time so the use of this filter can significantly slow down your pipeline's throughput if you have a high latency network. A cache containt GUID and application data is put in place to minimize the number of connections the filter will need to make. Instead of preforming a look up on every single Cloud Foundry log, the filter will look up the log the first time and refer to the cache for subsiquent calls (until the item is removed from the cache). The cache parameters should be configured according to your network and pipelines preformance. 
+This filter only processes 1 event at a time so the use of this filter can significantly slow down your pipeline's throughput if you have a high latency network. When the filter is initialized a cache will be created that will containt an applications GUID and relevant data. This is put in place to minimize the number of connections the filter will need to make. Instead of preforming a look up on every single Cloud Foundry log, the filter will look up the log the first time and refer to the cache for subsiquent calls (until the item is removed from the cache). The cache parameters should be configured according to your network and pipelines preformance. 
 
+In the event of a network or Cloud Foundry outage, the filter has some safeguards to protect your pipelines throughput. If the Cloud Foundry endpoint becomes unreachable you can set a timeout period before the CF CLI tries to communicate with the Cloud Foundry endpoint again. 
+
+Below is a list of the available config fields
+- cf_api : The Cloud Foundry API endpoint
+- cf_user: A valid Cloud Foundry user that has premission to the applications you want data for
+- cf_password: The users password
+- cf_org: A valid Cloud Foundry org that a user has premission to (required for a successful login)
+- cf_space: A valid Cloud Foundry space in the selected org that a user has premission to (required for a successful login)
+- skip_ssl_validation: A boolean flag to skip ssl validation on login
+- cache_flush_time: How often you want the job to clean out the cache to run
+- cace_age_time: A cache items time to live
+- cf_retry_cli_timeout: After a failed attempt to reach the Cloud Foundry endpoint, how long should the filter wait before using the cf   CLI again
+- cache_invalid_guids: If the Cloud Foundry API receives an invalid guid, cache it so the plugin won't waste resources continuously      trying to look it up
+ 
 Here are some example configurations:
-
    filter{
      cloudfoundry{
          cf_api      => "https://api.cf-domain.com"
