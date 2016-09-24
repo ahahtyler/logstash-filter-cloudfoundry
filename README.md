@@ -6,14 +6,48 @@ It is fully free and fully open source. The license is Apache 2.0, meaning you a
 
 ## Documentation
 
-Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elasticsearch.org/guide/en/logstash/current/).
+The Cloud Foundry filter will add the following meta-data to an application logs
+- Org name
+- Space name
+- Application name
 
-- For formatting code or config example, you can use the asciidoc `[source,ruby]` directive
-- For more asciidoc formatting tips, see the excellent reference here https://github.com/elasticsearch/docs#asciidoc-guide
+Cloud Foundry only provides the applications GUID and logtype when shipping logs directly from the loggregator. This filter will use that guid and the Cloud Foundry CLI to look up information about your application. 
 
-## Need Help?
+That being said, for this filter to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli).
 
-Need help? Try #logstash on freenode IRC or the https://discuss.elastic.co/c/logstash discussion forum.
+This filter can be used by any user in the Cloud Foundry environemnt that has the "space developer" role for the applications you want to collect data from (not only administrators). However, being an administrator does allow you to set up a more felxibile logging architecture, this fliter was designed to help app teams migrating to the cloud easily hook into thier existing ELK stacks. 
+
+This filter only processes 1 event at a time so the use of this filter can significantly slow down your pipeline's throughput if you have a high latency network. A cache containt GUID and application data is put in place to minimize the number of connections the filter will need to make. Instead of preforming a look up on every single Cloud Foundry log, the filter will look up the log the first time and refer to the cache for subsiquent calls (until the item is removed from the cache). The cache parameters should be configured according to your network and pipelines preformance. 
+
+Here are some example configurations:
+
+   filter{
+     cloudfoundry{
+         cf_api      => "https://api.cf-domain.com"
+         cf_user     => username
+         cf_password => password
+         cf_org      => "system"
+         cf_space    => "apps_manager"
+     }
+   }
+
+-------------------------------------------------------
+
+   filter{
+     if "zone1" in [tags]
+         cloudfoundry{
+             cf_api      => "https://api.cf-domain1.com"
+             ....
+         }
+     }
+     if "zone2" in [tags]
+         cloudfoundry{
+             cf_api      => "https://api.cf-domain2.com"
+             ....
+         }
+     }
+   }
+
 
 ## Developing
 
