@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.description   = "This filter will add App, Space, and Org metadata to CloudFoundry logs. This gem is a logstash plugin required to be installed on top of the Logstash core pipeline using $LS_HOME/bin/plugin install gemname. This gem is not a stand-alone program"
   s.authors       = ["Tyler Stigliano"]
   s.email         = 'info@elastic.co'
-  s.homepage      = "https://github.com/logstash-plugins/logstash-filter-example/"
+  s.homepage      = "https://github.com/ahahtyler/logstash-filter-cloudfoundry"
   s.require_paths = ["lib"]
 
   # Files
