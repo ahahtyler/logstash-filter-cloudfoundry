@@ -15,7 +15,7 @@ Cloud Foundry only provides an applications GUID when shipping logs directly fro
 
 That being said, for this filter to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli).
 
-This filter can be used by any user in the Cloud Foundry environemnt that has the "space developer" role for the applications you want to collect data from (not only administrators). However, being an administrator does allow you to set up a more felxibile logging architecture, this fliter was designed to help app teams migrating to the cloud easily hook into thier existing ELK stacks. 
+This filter can be used by any user in the Cloud Foundry environemnt that has the "space developer" role for the applications you want to collect data from. This fliter was designed to help app teams migrating to the cloud easily hook into thier existing ELK stacks. 
 
 This filter only processes 1 event at a time so the use of this filter can significantly slow down your pipeline's throughput if you have a high latency network. When the filter is initialized a cache will be created that will containt an applications GUID and relevant data. This is put in place to minimize the number of connections the filter will need to make. Instead of preforming a look up on every single Cloud Foundry log, the filter will look up the log the first time and refer to the cache for subsiquent calls (until the item is removed from the cache). The cache parameters should be configured according to your network and pipelines preformance. 
 
