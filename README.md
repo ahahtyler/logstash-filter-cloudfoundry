@@ -21,6 +21,8 @@ This filter only processes 1 event at a time so the use of this filter can signi
 
 In the event of a network or Cloud Foundry outage, the filter has some safeguards to protect your pipelines throughput. If the Cloud Foundry endpoint becomes unreachable you can set a timeout period before the CF CLI tries to communicate with the Cloud Foundry endpoint again. 
 
+This filter also supports paralle CF CLI logins. Meaning, if you have multiple Cloud Foundry endpoints, this filter can gracefully handle collecting data from both of them at the time. 
+
 Below is a list of the available config fields
 - cf_api : The Cloud Foundry API endpoint
 - cf_user: A valid Cloud Foundry user that has premission to the applications you want data for
@@ -34,33 +36,15 @@ Below is a list of the available config fields
 - cache_invalid_guids: If the Cloud Foundry API receives an invalid guid, cache it so the plugin won't waste resources continuously      trying to look it up
  
 Here are some example configurations:
-   filter{
-     cloudfoundry{
-         cf_api      => "https://api.cf-domain.com"
-         cf_user     => username
-         cf_password => password
-         cf_org      => "system"
-         cf_space    => "apps_manager"
-     }
-   }
-
--------------------------------------------------------
-
-   filter{
-     if "zone1" in [tags]
-         cloudfoundry{
-             cf_api      => "https://api.cf-domain1.com"
-             ....
-         }
-     }
-     if "zone2" in [tags]
-         cloudfoundry{
-             cf_api      => "https://api.cf-domain2.com"
-             ....
-         }
-     }
-   }
-
+filter{
+  cloudfoundry{
+    cf_api      => "https://api.cf-domain.com"
+    cf_user     => "username"
+    cf_password => "password"
+    cf_org      => "system"
+    cf_spaec    => "apps_manager"
+  }
+}
 
 ## Developing
 
