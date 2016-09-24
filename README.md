@@ -34,6 +34,7 @@ Below is a list of the available config fields
 - cache_invalid_guids: If the Cloud Foundry API receives an invalid guid, cache it so the plugin won't waste resources continuously      trying to look it up
  
 Here are some example configurations:
+```sh
 filter{
   cloudfoundry{
     cf_api      => "https://api.cf-domain.com"
@@ -43,7 +44,7 @@ filter{
     cf_space    => "apps_manager"
   }
 }
-
+```
 ## Developing
 
 ### 1. Plugin Developement and Testing
