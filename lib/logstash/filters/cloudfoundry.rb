@@ -7,13 +7,12 @@ require "open-uri"
 require "rufus/scheduler"
 require "open3"
 
+
 # The Cloud Foundry filter performs a lookup against a Cloud Foundry foundation to provide the following pieces of
-# meta-data to an application log and stores this data in a local cache. 
+# meta-data to an application log
 #  - Org name
 #  - Space name
 #  - Application name
-#
-# For this plugin to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli)
 #
 #The conf should look like this:
 #   filter{
@@ -26,6 +25,8 @@ require "open3"
 #     }
 #   }
 #
+# For this plugin to work you will need the CF CLI installed on your system. (https://github.com/cloudfoundry/cli)
+#
 # This filter, only processes 1 event at a time, so the use of this plugin can significantly slow down your pipeline's
 # throughput if you have a high latency network. In the event of an outage (network or cloud foundry infrastructure), a
 # retry flag can bet set to reduce the number of failed log-in and curl attempts to the Cloud Foundry endpoint. This
@@ -33,12 +34,28 @@ require "open3"
 # period and a cache items TTL will reduce slow down to your pipeline's throughput at the cost of additional resource
 # consumption.
 #
-# Currently, this filter can only handle logs from a single Cloud Foundry foundation. Due to a limitation with the
-# Cloud Foundry CLI (command line interface) only a single foundation can be logged into at a time. This causes race
-# conditions that this plugin currently won't handle gracefully.
+# To set up receiving logs from multiple foundations the user executing logstash will need write premissions to it's
+# home directiory. To achieve connecting to multiple CF endpoints at once the CF_HOME variable needs to be a unique
+# path for each initialization of the plugin. The configuration should look similar to the following: 
+#
+#   filter{
+#     if "zone1" in [tags]
+#         cloudfoundry{
+#             cf_api      => "https://api.cf-domain1.com"
+#             ....
+#         }
+#     }
+#     if "zone2" in [tags]
+#         cloudfoundry{
+#             cf_api      => "https://api.cf-domain2.com"
+#             ....
+#         }
+#     }
+#   }
+#
+#
 
 class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
-  #TODO: Multi-foundation suppport
   #TODO: Pull "log-type" field from raw Cloud Foundry log
   #TODO: Determine windows equivalent of a linux "timeout" command to improve pipeline throughput during an outage
 
@@ -71,16 +88,18 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI again
   config :cf_retry_cli_timeout,	      :validate => :number,  :default => 0
 
-  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't waste resouces continuously curling for it 
+  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't want resouces continuously curling it 
   config :cache_invalid_guids, 		  :validate => :boolean, :default => false
   
   public
   def register
 
+    #Check input
     if @cf_api.empty? || @cf_user.empty? || @cf_password.empty? || @cf_org.empty? || @cf_space.empty?
       raise "Required paramters where left blank."
     end
-
+	
+	#Set up cache and scheduler
     @app_cache       = Hash.new
     @app_cache_mutex = Mutex.new
     @scheduler       = Rufus::Scheduler.new
@@ -94,13 +113,25 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
       end
     end
 
+	#define CF_HOME path
+    @cf_path = "#{ENV['HOME']}/#{@cf_api.gsub(/[^0-9A-Za-z]/, '')}"	
+    stdout, stderr, status = Open3.capture3("mkdir #{@cf_path}")	
+	
+	#Check folder creation status. 
+	unless status.success?
+      unless response.include?("File exists")
+		raise "CF-Home-Folder-Creation: #{stderr}"
+      end
+    end
+
+	#Login to CF endpoint
     login_query = cflogin
     raise "CF-login-failed: #{login_query[:stdout]}" unless login_query[:status]
 
     @cf_retry_cli_timeout > 0 ? @cf_retry_cli = true : @cf_retry_cli = false
     @login_next = Time.now.to_i
     @cf_logged_in = true
-
+	
   rescue Exception => e
 
     @cf_retry_cli = false
@@ -182,10 +213,10 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     if query[:status]
       if query[:stdout]['metadata'].nil?
 		
-	if @cache_invalid_guids && !guid.blank?
-  	  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
-	end
-	  
+		if @cache_invalid_guids && !guid.blank?
+		  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
+		end
+	 
         raise "CF-curl-inavlid: #{query[:stdout]}"
       end
     else
@@ -220,11 +251,9 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
   private
   def cf(cmd)
-
-    stdout, stderr, status = Open3.capture3("cf #{cmd}")
-    command_output = { :stdout => valid_json?(stdout), :stderr => stderr, :status => status.success?}
+	stdout, stderr, status = Open3.capture3({"CF_HOME" => "#{@cf_home}"}, "cf #{cmd}")	
+	command_output = { :stdout => valid_json?(stdout), :stderr => stderr, :status => status.success?}
     command_output
-
   end # def cf
 
   private
