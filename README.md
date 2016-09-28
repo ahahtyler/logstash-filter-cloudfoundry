@@ -42,6 +42,10 @@ filter{
     cf_password => "password"
     cf_org      => "system"
     cf_space    => "apps_manager"
+    skip_ssl_validation => true
+    cache_flush_time => "10m"
+    cache_age_time => 600
+    cache_invalid_guids => false
   }
 }
 ```
