@@ -36,7 +36,7 @@ require "open3"
 #
 # To set up receiving logs from multiple foundations the user executing logstash will need write premissions to it's
 # home directiory. To achieve connecting to multiple CF endpoints at once the CF_HOME variable needs to be a unique
-# path for each initialization of the plugin. The configuration should look similar to the following: 
+# path for each initialization of the plugin. The configuration should look similar to the following:
 #
 #   filter{
 #     if "zone1" in [tags]
@@ -88,9 +88,9 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   # After a failed attempt to reach the Cloud Foundry endpoint, how long should the plugin wait before using the cf CLI again
   config :cf_retry_cli_timeout,	      :validate => :number,  :default => 0
 
-  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't waste resouces continuously curling it 
+  # If the the Cloud Foundry API can not find GUID, cache it so plugin won't waste resouces continuously curling it
   config :cache_invalid_guids, 		  :validate => :boolean, :default => false
-  
+
   public
   def register
 
@@ -98,7 +98,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     if @cf_api.empty? || @cf_user.empty? || @cf_password.empty? || @cf_org.empty? || @cf_space.empty?
       raise "Required paramters where left blank."
     end
-	
+
     #Set up cache and scheduler
     @app_cache       = Hash.new
     @app_cache_mutex = Mutex.new
@@ -114,10 +114,11 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     end
 
     #define CF_HOME path
-    @cf_path = "#{ENV['HOME']}/#{@cf_api.gsub(/[^0-9A-Za-z]/, '')}"	
-    stdout, stderr, status = Open3.capture3("mkdir #{@cf_path}")	
-	
-    #Check folder creation status. 
+    @cf_path = "#{ENV['HOME']}/#{@cf_api.gsub(/[^0-9A-Za-z]/, '')}"
+    stdout, stderr, status = Open3.capture3("mkdir #{@cf_path}")
+
+    #TODO: There's a cleaner way to do this
+    #Check folder creation status.
     unless status.success?
       unless stderr.include?("File exists")
         raise "CF-Home-Folder-Creation: #{stderr}"
@@ -131,7 +132,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
     @cf_retry_cli_timeout > 0 ? @cf_retry_cli = true : @cf_retry_cli = false
     @login_next = Time.now.to_i
     @cf_logged_in = true
-	
+
   rescue Exception => e
 
     @cf_retry_cli = false
@@ -146,63 +147,88 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
     if @cf_logged_in
 
+      #Grab guid from log message
       message = event["message"]
       app_guid = message[/loggregator ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/, 1]
 
       unless app_guid.nil?
 
+        #Store guid in event
         event["appguid"] = app_guid
+
+        #Check if guid is already in cache
         app_cache_item = nil
         @app_cache_mutex.synchronize { app_cache_item = @app_cache[app_guid] }
 
         if app_cache_item.nil?
 
+          #Curl CF for app data
           app_query   = cfcurl("/v2/apps/#{app_guid}")
           validate_query(app_query, app_guid)
 
+          #Curl CF for space data
           space_query = cfcurl("/v2/spaces/#{app_query[:stdout]["entity"]["space_guid"]}")
           validate_query(space_query)
 
+          #Curl CF for org data
           org_query   = cfcurl("/v2/organizations/#{space_query[:stdout]["entity"]["organization_guid"]}")
           validate_query(org_query)
 
+          #Create a hash with info
           app_info = Hash.new()
           app_info["appname"]   = app_query[:stdout]["entity"]["name"]
           app_info["spacename"] = space_query[:stdout]["entity"]["name"]
           app_info["orgname"]   = org_query[:stdout]["entity"]["name"]
 
+          #Store hash in cache
           app_cache_item = Hash.new()
           app_cache_item["info"]      = app_info
           app_cache_item["expire_at"] = Time.now.to_i + @cache_age_time
           @app_cache_mutex.synchronize { @app_cache[app_guid] = app_cache_item }
 
         else
+
+          #Pull info from cache
           app_info = app_cache_item['info']
+
         end
+
+        #load app info into the log event
         app_info.each { |k,v| event[k] = v }
+
       end
 
     else
 
       if @login_next <= Time.now.to_i && @cf_retry_cli
+
+        #Try logging in again
         login_query = cflogin
         raise "CF-login-failed: #{login_query[:stdout]}" unless login_query[:status]
         @cf_logged_in = true
+
       end
 
     end
 
+    #Signal that I'm finished parsing log
     filter_matched(event)
 
   rescue Exception => e
-
+    
     if e.inspect.include?("CF-curl-failed") || e.inspect.include?("CF-login-failed")
+      
+      #Set time and log out
       @logger.error("Exception: #{e.inspect}.")
       @login_next   = Time.now.to_i + @cf_retry_cli_timeout
       @cf_logged_in = false
+
     else
+
       @logger.error("Exception: #{e.inspect}")
+
     end
+
     @logger.error("Backtrace: #{e.backtrace}")
 
   end # def filter
@@ -212,11 +238,12 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
     if query[:status]
       if query[:stdout]['metadata'].nil?
-		
-	if @cache_invalid_guids && !guid.blank?
-	  @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
-	end
-	 
+        
+        #Cache failed guid if flag was set
+        if @cache_invalid_guids && !guid.blank?
+          @app_cache_mutex.synchronize { @app_cache[guid] = {"info" => {}, "expire_at" => Time.now.to_i + @cache_age_time} }
+        end
+
         raise "CF-curl-inavlid: #{query[:stdout]}"
       end
     else
@@ -228,6 +255,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   private
   def cfcurl(path, body = nil)
 
+    #Build curl body
     if body.nil?
       cf('curl ' + URI::encode(path))
     else
@@ -239,6 +267,7 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
   private
   def cflogin
 
+    #Build login command
     cf( 'login' +
             (@skip_ssl_validation ? ' --skip-ssl-validation' : '') +
             ' -a ' + @cf_api +
@@ -251,9 +280,12 @@ class LogStash::Filters::CloudFoundry < LogStash::Filters::Base
 
   private
   def cf(cmd)
-    stdout, stderr, status = Open3.capture3({"CF_HOME" => "#{@cf_home}"}, "cf #{cmd}")	
+    
+    #execute CF CLI command
+    stdout, stderr, status = Open3.capture3({"CF_HOME" => "#{@cf_home}"}, "cf #{cmd}")
     command_output = { :stdout => valid_json?(stdout), :stderr => stderr, :status => status.success?}
     command_output
+    
   end # def cf
 
   private
